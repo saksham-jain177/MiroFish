@@ -43,3 +43,7 @@ python run_synthetica.py
 
 ## 📈 Architecture Note
 This project replaces the `OASIS` social media dependencies with a custom `synthetica_environment.py` grid loop to allow deep-reasoning multi-agent simulations on highly constrained local hardware.
+
+## 🙏 Acknowledgments
+**Project Synthetica** is proudly built as a deeply specialized fork of **[MiroFish](https://github.com/666ghj/MiroFish)**. 
+We extend our profound thanks to the original MiroFish team and the CAMEL-AI group (creators of OASIS) for laying the incredible open-source groundwork for multi-agent social simulations!
