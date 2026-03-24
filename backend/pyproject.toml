@@ -1,7 +1,7 @@
 [project]
 name = "mirofish-backend"
 version = "0.1.0"
-description = "MiroFish - ，"
+description = "A Cognitive Sandbox for testing emergent behavior, ideological evolution, and adversarial Swarm Intelligence."
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0" }
 authors = [

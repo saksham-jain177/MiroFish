@@ -1,7 +1,7 @@
 {
   "name": "mirofish",
   "version": "0.1.0",
-  "description": "MiroFish - ，",
+  "description": "A Cognitive Sandbox for testing emergent behavior, ideological evolution, and adversarial Swarm Intelligence.",
   "scripts": {
     "setup": "npm install && cd frontend && npm install",
     "setup:backend": "cd backend && uv sync",
