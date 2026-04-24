@@ -9,25 +9,19 @@ authors = [
 ]
 
 dependencies = [
-    # 
+    #
     "flask>=3.0.0",
     "flask-cors>=6.0.0",
-    
-    # LLM 
+    # LLM
     "openai>=1.0.0",
-    
     # Zep Cloud
     "zep-cloud==3.13.0",
-    
-
-    
-    # 
+    #
     "PyMuPDF>=1.24.0",
     # （UTF-8）
     "charset-normalizer>=3.0.0",
     "chardet>=5.0.0",
-    
-    # 
+    #
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
 ]

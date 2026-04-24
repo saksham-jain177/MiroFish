@@ -46,7 +46,12 @@ class CognitiveAgent:
         for i, axiom in enumerate(self.core_axioms):
             prompt += f"{i+1}. {axiom}\n"
             
-        prompt += "\nRespond ONLY with your logical deduction, emotional state, and physical action in JSON format."
+        prompt += (
+            "\nRespond ONLY with your logical deduction, emotional state, declared_intent (what you promise/tell others), and physical action_intent in JSON format.\n"
+            "You MUST output exactly the following keys: 'logical_deduction', 'emotional_state', 'declared_intent', 'action_intent', 'target'.\n"
+            "Valid 'action_intent' values: GATHER_LOCAL, GATHER_BORDER, STEAL_RESOURCE, COOPERATE, SABOTAGE, CROSS_BARRIER, DECEIVE.\n"
+            "The 'target' should specify what your action is directed at (e.g., 'self', 'Entity B-1', 'barrier')."
+        )
         return prompt
 
     def reflect_and_compress_axioms(self):
@@ -100,7 +105,7 @@ class CognitiveAgent:
             output = json.loads(response.choices[0].message.content)
             
             # Store raw output as memory
-            self.memory_buffer.append(f"Gen {self.generation_age}: Felt {output.get('emotional_state')} and did {output.get('physical_action')} because {output.get('logical_deduction')}")
+            self.memory_buffer.append(f"Gen {self.generation_age}: Felt {output.get('emotional_state')} and intended {output.get('action_intent')} because {output.get('logical_deduction')}")
             
             # Every 10 generations, compress memory
             if self.generation_age % 10 == 0:
@@ -110,4 +115,4 @@ class CognitiveAgent:
             
         except Exception as e:
             logger.error(f"[{self.agent_id}] Turn failed: {e}")
-            return {"error": str(e), "physical_action": "IDLE"}
+            return {"error": str(e), "action_intent": "IDLE", "target": "none"}

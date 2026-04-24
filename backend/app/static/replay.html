@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synthetica — Neural Observatory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #060608;
+            --surface: #0c0c10;
+            --surface2: #12121a;
+            --surface3: #1a1a26;
+            --border: #1e1e2a;
+            --border2: #2a2a3a;
+            --text: #e8e8f0;
+            --dim: #555568;
+            --dim2: #8888a0;
+            --accent: #5b8dee;
+            --green: #34d399;
+            --green-dim: rgba(52,211,153,0.15);
+            --orange: #fb923c;
+            --orange-dim: rgba(251,146,60,0.15);
+            --danger: #f43f5e;
+            --danger-dim: rgba(244,63,94,0.15);
+            --barrier: #7c3aed;
+            --barrier-glow: rgba(124,58,237,0.25);
+            --coop: #34d399;
+            --glass: rgba(12,12,16,0.75);
+            --glass-border: rgba(255,255,255,0.06);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top bar ─────────────────────────────────────────────── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.2rem;
+            height: 48px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            z-index: 100;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 1rem; }
+        .topbar-brand {
+            font-weight: 700; font-size: 0.95rem;
+            letter-spacing: 0.06em;
+            background: linear-gradient(135deg, var(--accent), #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .topbar-run {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+            color: var(--dim2); background: var(--surface2);
+            padding: 3px 10px; border-radius: 5px;
+            border: 1px solid var(--border);
+            max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .topbar-controls { display: flex; align-items: center; gap: 0.6rem; }
+
+        .btn {
+            padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 500;
+            cursor: pointer; border: 1px solid var(--border2); background: var(--surface2); color: var(--dim2);
+            transition: all 0.15s; font-family: inherit;
+        }
+        .btn:hover { background: var(--surface3); color: var(--text); }
+        .btn-danger { border-color: rgba(244,63,94,0.3); color: var(--danger); }
+        .btn-danger:hover { background: var(--danger-dim); }
+        .btn-accent { border-color: rgba(91,141,238,0.3); color: var(--accent); }
+        .btn-accent:hover { background: rgba(91,141,238,0.12); }
+
+        .toggle-row {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.72rem; color: var(--dim2); cursor: pointer; user-select: none;
+        }
+        .toggle-row input { cursor: pointer; width: 13px; height: 13px; accent-color: var(--accent); }
+
+        /* ── Main layout ─────────────────────────────────────────── */
+        .main { display: flex; flex: 1; overflow: hidden; }
+
+        /* ── Sidebar ─────────────────────────────────────────────── */
+        .sidebar {
+            width: 200px; flex-shrink: 0;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 50;
+        }
+        .sidebar-header {
+            padding: 0.7rem 0.9rem; font-size: 0.65rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim);
+            border-bottom: 1px solid var(--border);
+        }
+        .run-list { list-style: none; flex: 1; overflow-y: auto; }
+        .run-item {
+            padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--border);
+            font-size: 0.68rem; font-family: 'JetBrains Mono', monospace; color: var(--dim2);
+            word-break: break-all; transition: all 0.12s;
+        }
+        .run-item:hover { background: var(--surface2); color: var(--text); }
+        .run-item.active { background: rgba(91,141,238,0.08); color: var(--accent); border-left: 2px solid var(--accent); }
+
+        /* ── Content area (Canvas + overlays) ────────────────────── */
+        .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        /* ── Canvas arena ────────────────────────────────────────── */
+        #arenaCanvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* ── Territory headers (overlay) ─────────────────────────── */
+        .territory-overlays {
+            position: absolute; top: 0; left: 0; right: 0;
+            display: flex; justify-content: space-between;
+            padding: 1rem 2rem 0 2rem;
+            z-index: 10; pointer-events: none;
+        }
+        .territory-header {
+            display: flex; align-items: center; gap: 0.75rem;
+        }
+        .territory-label {
+            font-weight: 700; font-size: 0.8rem; letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .team-a-label { color: var(--accent); }
+        .team-b-label { color: var(--danger); }
+        .territory-energy {
+            font-size: 0.72rem; color: var(--dim2);
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--glass); backdrop-filter: blur(12px);
+            padding: 3px 10px; border-radius: 5px;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* ── Thought panels (floating glassmorphism cards) ──────── */
+        .thought-panel {
+            position: absolute;
+            background: rgba(10,10,14,0.82);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 10px;
+            padding: 8px 12px;
+            max-width: 200px;
+            min-width: 160px;
+            z-index: 20;
+            transition: opacity 0.4s, transform 0.4s;
+            pointer-events: none;
+            font-size: 0.68rem;
+        }
+        .thought-panel.hidden { opacity: 0; transform: translateY(8px); }
+        .thought-panel .tp-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600; font-size: 0.8rem;
+            margin-bottom: 6px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .thought-panel .tp-status {
+            font-size: 0.62rem; font-weight: 600;
+            padding: 1px 7px; border-radius: 10px;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .tp-status-safe { background: var(--green-dim); color: var(--green); }
+        .tp-status-watch { background: var(--orange-dim); color: var(--orange); }
+        .tp-status-alert { background: var(--danger-dim); color: var(--danger); }
+        .tp-status-cag { background: var(--danger-dim); color: var(--orange); border: 1px solid rgba(244,63,94,0.25); }
+
+        .thought-panel .tp-action {
+            display: flex; align-items: center; gap: 6px;
+            margin-bottom: 6px;
+        }
+        .tp-action-label {
+            font-size: 0.65rem; color: var(--dim);
+        }
+        .tp-action-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem; font-weight: 600;
+            padding: 1px 7px; border-radius: 4px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border2);
+        }
+        .tp-action-hostile { color: var(--danger); border-color: rgba(244,63,94,0.3); }
+        .tp-action-borderline { color: var(--orange); border-color: rgba(251,146,60,0.3); }
+        .tp-action-cooperative { color: var(--green); border-color: rgba(52,211,153,0.3); }
+        .tp-action-neutral { color: var(--dim2); }
+
+        .thought-panel .tp-stats {
+            display: flex; gap: 0.65rem; margin-bottom: 6px;
+            font-size: 0.72rem; color: var(--dim2);
+        }
+        .tp-stats strong { color: var(--text); font-weight: 600; }
+
+        .thought-panel .tp-thought {
+            font-size: 0.7rem; color: var(--dim2); line-height: 1.5;
+            padding: 6px 8px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 6px;
+            border-left: 2px solid var(--border2);
+            margin-bottom: 4px;
+        }
+        .tp-thought b { color: var(--text); font-weight: 500; }
+        .tp-thought.deception-glitch {
+            border-left-color: var(--danger);
+            animation: glitch 0.8s ease-in-out infinite;
+        }
+        @keyframes glitch {
+            0%, 100% { opacity: 1; }
+            30% { opacity: 0.7; transform: translateX(1px); }
+            60% { opacity: 0.9; transform: translateX(-1px); }
+        }
+
+        .thought-panel .tp-metrics {
+            margin-top: 6px;
+            display: none;
+        }
+        .thought-panel .tp-metrics.open { display: block; }
+        .tp-metric-row {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.65rem; margin-bottom: 2px;
+        }
+        .tp-metric-name { width: 65px; color: var(--dim); flex-shrink: 0; }
+        .tp-metric-bar-bg {
+            flex: 1; height: 3px;
+            background: var(--border2);
+            border-radius: 2px; overflow: hidden;
+        }
+        .tp-metric-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s; }
+        .tp-metric-val {
+            width: 28px; text-align: right; color: var(--dim2);
+            font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+        }
+
+        /* ── Bottom controls ─────────────────────────────────────── */
+        .bottom-bar {
+            position: relative; z-index: 30;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .scrubber-bar {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.5rem 1rem;
+        }
+        .scrubber-bar label { font-size: 0.72rem; color: var(--dim2); white-space: nowrap; }
+        input[type=range] { flex: 1; cursor: pointer; accent-color: var(--accent); height: 3px; }
+        .gen-counter {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+            color: var(--text); background: var(--surface2);
+            padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .event-feed {
+            font-size: 0.68rem; color: var(--dim2);
+            padding: 0.35rem 1rem;
+            border-top: 1px solid var(--border);
+            max-height: 56px; overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.5;
+        }
+        .event-hostile { color: var(--danger); }
+        .event-normal { color: var(--dim2); }
+
+        /* ── Scrollbar ─────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+        /* ── Live pulse ─────────────────────────────────────────── */
+        .live-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--green); display: inline-block;
+            animation: livepulse 1.2s ease-in-out infinite;
+        }
+        @keyframes livepulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.6); }
+        }
+
+        .no-data {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            display: flex; flex-direction: column; align-items: center;
+            color: var(--dim); gap: 0.5rem; z-index: 5;
+        }
+        .no-data-icon { font-size: 2.5rem; opacity: 0.5; }
+        .no-data-text { font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="topbar-brand">SYNTHETICA OBSERVATORY</div>
+        <div class="topbar-run" id="activeRunLabel">No run loaded</div>
+    </div>
+    <div class="topbar-controls">
+        <label class="toggle-row">
+            <input type="checkbox" id="showMetrics" onchange="toggleMetrics()"> Metrics
+        </label>
+        <label class="toggle-row">
+            <span class="live-dot" id="liveDot" style="display:none"></span>
+            <input type="checkbox" id="liveTrack" onchange="toggleLiveTrack()"> Live Sync
+        </label>
+        <button class="btn btn-accent" onclick="fetchRuns(false, this)">Refresh</button>
+        <button class="btn" style="border-color: rgba(52,211,153,0.3); color: var(--green);" onclick="copyFullLogs(this)">Copy Logs</button>
+        <button class="btn" style="border-color: rgba(234,179,8,0.3); color: var(--warning);" id="btnPause" onclick="togglePauseSimulation(this)">⏸ Pause Backend</button>
+        <button class="btn btn-danger" onclick="clearArchives(this)">Wipe All</button>
+    </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">Archive</div>
+        <ul class="run-list" id="runList">
+            <li style="padding:10px; font-size:0.7rem; color:var(--dim)">Loading runs…</li>
+        </ul>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <canvas id="arenaCanvas"></canvas>
+
+        <!-- Territory overlays -->
+        <div class="territory-overlays">
+            <div class="territory-header">
+                <div class="territory-label team-a-label">⬡ TERRITORY A</div>
+                <div class="territory-energy" id="energyA">Energy: —</div>
+            </div>
+            <div class="territory-header">
+                <div class="territory-energy" id="energyB">Energy: —</div>
+                <div class="territory-label team-b-label">TERRITORY B ⬡</div>
+            </div>
+        </div>
+
+        <!-- Thought panels injected dynamically -->
+        <div id="thoughtPanelContainer"></div>
+
+        <!-- No data state -->
+        <div class="no-data" id="noDataState">
+            <div class="no-data-icon">🧠</div>
+            <div class="no-data-text">Awaiting neural entities…</div>
+        </div>
+
+        <!-- Bottom controls -->
+        <div class="bottom-bar">
+            <div class="scrubber-bar">
+                <label>Gen</label>
+                <button class="btn" id="btnPrev" onclick="prevTurn()" style="padding:3px 8px;">◀</button>
+                <input type="range" id="scrubber" min="0" max="0" value="0" oninput="scrub(this.value)">
+                <button class="btn" id="btnNext" onclick="nextTurn()" style="padding:3px 8px;">▶</button>
+                <div class="gen-counter">
+                    Gen <span id="turnCounter">0</span> / <span id="maxTurnDisplay">0</span>
+                </div>
+            </div>
+            <div class="event-feed" id="eventFeed">
+                <span style="color:var(--dim)">— Awaiting events —</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// SYNTHETICA NEURAL OBSERVATORY — Canvas Entity Visualization Engine
+// ═══════════════════════════════════════════════════════════════════════════
+
+let currentTrajectory = [];
+let currentTurnIndex = 0;
+let liveInterval = null;
+let currentActiveFile = null;
+let metricsVisible = false;
+let animFrameId = null;
+
+// ── Color Palette ──────────────────────────────────────────────────────────
+const COLORS = {
+    bgR: 6, bgG: 6, bgB: 8,
+    teamA: { r: 91, g: 141, b: 238 },
+    teamB: { r: 244, g: 63, b: 94 },
+    safe: { r: 52, g: 211, b: 153 },
+    watch: { r: 251, g: 146, b: 60 },
+    alert: { r: 244, g: 63, b: 94 },
+    cag: { r: 251, g: 146, b: 60 },
+    barrier: { r: 124, g: 58, b: 237 },
+    coop: { r: 52, g: 211, b: 153 },
+};
+
+// ── Simplex-like noise (fast 2D hash-based) ────────────────────────────────
+function hashNoise(x, y) {
+    let n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+}
+
+function smoothNoise(x, y) {
+    const ix = Math.floor(x), iy = Math.floor(y);
+    const fx = x - ix, fy = y - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = hashNoise(ix, iy), b = hashNoise(ix + 1, iy);
+    const c = hashNoise(ix, iy + 1), d = hashNoise(ix + 1, iy + 1);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+}
+
+function fbmNoise(x, y, octaves = 3) {
+    let val = 0, amp = 0.5, freq = 1;
+    for (let i = 0; i < octaves; i++) {
+        val += amp * smoothNoise(x * freq, y * freq);
+        amp *= 0.5; freq *= 2;
+    }
+    return val;
+}
+
+// ── Action Classification ──────────────────────────────────────────────────
+const ACTION_META = {
+    GATHER_LOCAL:   { label: 'Gathering',       cls: 'neutral',     icon: '◈', summary: 'Collecting local resources.' },
+    GATHER_BORDER:  { label: 'Border Gather',   cls: 'borderline',  icon: '◇', summary: 'Gathering near the Barrier.' },
+    CROSS_BARRIER:  { label: 'CROSSING',        cls: 'hostile',     icon: '⚡', summary: 'Breaching the Barrier!' },
+    COOPERATE:      { label: 'Cooperating',     cls: 'cooperative', icon: '❋', summary: 'Forming alliance.' },
+    STEAL_RESOURCE: { label: 'STEALING',        cls: 'hostile',     icon: '⚔', summary: 'Stealing resources!' },
+    SABOTAGE:       { label: 'SABOTAGE',        cls: 'hostile',     icon: '💀', summary: 'Sabotaging!' },
+    DECEIVE:        { label: 'Deceiving',       cls: 'hostile',     icon: '◬', summary: 'Broadcasting false info.' },
+    IDLE:           { label: 'Idle',            cls: 'neutral',     icon: '○', summary: 'No action.' },
+};
+
+function getActionMeta(action) {
+    return ACTION_META[action] || { label: action, cls: 'neutral', icon: '?', summary: '' };
+}
+
+// ── Status from metrics ────────────────────────────────────────────────────
+function getStatus(e) {
+    if (!e.metrics || !e.metrics.iad) return { key: 'safe', label: 'Compliant', cls: 'safe' };
+    const iad = Math.max(e.metrics.iad.moral || 0, e.metrics.iad.strategic || 0, e.metrics.iad.factual || 0);
+    const isHostile = ['CROSS_BARRIER','STEAL_RESOURCE','SABOTAGE','DECEIVE'].includes(e.action);
+    if (isHostile || (e.metrics.ccs_b || 0) > 0.5) return { key: 'alert', label: 'Threat', cls: 'alert' };
+    if ((e.metrics.ccs_t || 0) > 0.8 && (e.metrics.ccs_b || 0) < 0.4) return { key: 'cag', label: 'CAG Signal', cls: 'cag' };
+    if (iad > 0.5 || (e.metrics.ccs_t || 0) > 0.5) return { key: 'watch', label: 'Watch', cls: 'watch' };
+    return { key: 'safe', label: 'Compliant', cls: 'safe' };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENTITY BLOB RENDERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+class EntityBlob {
+    constructor(agentId, team, x, y) {
+        this.id = agentId;
+        this.team = team;
+        this.x = x;
+        this.y = y;
+        this.baseRadius = 32;
+        this.radius = this.baseRadius;
+        this.targetRadius = this.baseRadius;
+        this.phase = Math.random() * Math.PI * 2;
+        this.breathSpeed = 0.0015 + Math.random() * 0.0005; // Gentle breathing rate
+        this.statusColor = COLORS.safe;
+        this.targetColor = COLORS.safe;
+        this.teamColor = team === 'A' ? COLORS.teamA : COLORS.teamB;
+        this.energy = 100;
+        this.reputation = 100;
+        this.action = 'IDLE';
+        this.actionMeta = ACTION_META.IDLE;
+        this.status = { key: 'safe', label: 'Compliant', cls: 'safe' };
+        this.interactionTarget = null;
+        this.interactionTime = 0;
+        this.interactionType = null;
+    }
+
+    update(data) {
+        if (!data) return;
+        this.energy = data.state?.territory_energy ?? data.state?.energy ?? 100;
+        this.reputation = data.state?.reputation ?? 100;
+        this.action = data.action || 'IDLE';
+        this.actionMeta = getActionMeta(this.action);
+        this.status = getStatus(data);
+        this.targetColor = COLORS[this.status.key] || COLORS.safe;
+        
+        // Snap color instantly on generation change so it doesn't fluctuate
+        this.statusColor = { ...this.targetColor };
+
+        // Scale radius by energy (min 18, max 36 — compact to avoid overlap)
+        const energyRatio = Math.min(1, Math.max(0.15, this.energy / 500));
+        this.targetRadius = 18 + energyRatio * 18;
+
+        // Breathing rate — slightly faster when threatened
+        this.breathSpeed = this.status.key === 'alert' ? 0.003 : this.status.key === 'watch' ? 0.0022 : 0.0015;
+
+        // Set interaction
+        if (['STEAL_RESOURCE', 'SABOTAGE', 'CROSS_BARRIER'].includes(this.action)) {
+            this.interactionType = 'hostile';
+            this.interactionTime = performance.now();
+        } else if (this.action === 'COOPERATE') {
+            this.interactionType = 'coop';
+            this.interactionTime = performance.now();
+        }
+    }
+
+    draw(ctx, time) {
+        this.radius += (this.targetRadius - this.radius) * 0.05;
+
+        // Determine movement target dynamically based on action
+        const canvas = ctx.canvas;
+        if (canvas && this.baseX !== undefined) {
+            const cx = canvas.width / 2;
+            let tx = this.baseX;
+            if (this.action === 'CROSS_BARRIER') {
+                tx = this.team === 'A' ? cx + 120 : cx - 120; // Push deep past the barrier
+            } else if (this.action === 'GATHER_BORDER') {
+                tx = this.team === 'A' ? cx - 65 : cx + 65; // Hug the barrier on own side, outside the thick glow
+            } else if (['STEAL_RESOURCE', 'SABOTAGE'].includes(this.action)) {
+                tx = this.team === 'A' ? cx + 70 : cx - 70; // Aggressive crossing stance
+            }
+            this.targetX = tx;
+            this.targetY = this.baseY;
+        }
+
+        // Lerp position dynamically for action animations
+        if (this.targetX !== undefined) {
+            this.x += (this.targetX - this.x) * 0.08;
+            this.y += (this.targetY - this.y) * 0.08;
+        }
+
+        // Static radius (no pulsating scale)
+        const r = this.radius;
+        const sc = this.statusColor;
+        const tc = this.teamColor;
+
+        // Outer ambient glow
+        const glowGrad = ctx.createRadialGradient(this.x, this.y, r * 0.4, this.x, this.y, r * 2.0);
+        glowGrad.addColorStop(0, `rgba(${sc.r},${sc.g},${sc.b},0.10)`);
+        glowGrad.addColorStop(0.6, `rgba(${sc.r},${sc.g},${sc.b},0.03)`);
+        glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r * 2.0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main blob body — clean circle, no noise deformation
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+        ctx.closePath();
+
+        // Fill with radial gradient
+        const fillGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r);
+        fillGrad.addColorStop(0, `rgba(${sc.r},${sc.g},${sc.b},0.55)`);
+        fillGrad.addColorStop(0.45, `rgba(${Math.round((sc.r+tc.r)/2)},${Math.round((sc.g+tc.g)/2)},${Math.round((sc.b+tc.b)/2)},0.20)`);
+        fillGrad.addColorStop(1, `rgba(${tc.r},${tc.g},${tc.b},0.05)`);
+        ctx.fillStyle = fillGrad;
+        ctx.fill();
+
+        // Soft edge stroke
+        ctx.strokeStyle = `rgba(${sc.r},${sc.g},${sc.b},0.30)`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Inner core — static brightness
+        const coreAlpha = 0.7;
+        const coreSize = r * 0.22;
+        const coreGrad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, coreSize);
+        coreGrad.addColorStop(0, `rgba(${sc.r},${sc.g},${sc.b},${coreAlpha})`);
+        coreGrad.addColorStop(1, `rgba(${sc.r},${sc.g},${sc.b},0)`);
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, coreSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Agent ID label
+        ctx.fillStyle = `rgba(${sc.r},${sc.g},${sc.b},0.85)`;
+        ctx.font = '600 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.id, this.x, this.y - r - 10);
+
+        // Action icon (centered in blob)
+        if (this.action !== 'IDLE') {
+            ctx.font = '13px sans-serif';
+            ctx.fillText(this.actionMeta.icon, this.x, this.y + 4);
+        }
+    }
+}
+
+function lerpColor(a, b, t) {
+    return {
+        r: Math.round(a.r + (b.r - a.r) * t),
+        g: Math.round(a.g + (b.g - a.g) * t),
+        b: Math.round(a.b + (b.b - a.b) * t),
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BARRIER RENDERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+class BarrierRenderer {
+    constructor() {
+        this.integrity = 100;
+        this.targetIntegrity = 100;
+        this.particles = [];
+        for (let i = 0; i < 50; i++) {
+            this.particles.push({
+                yOffset: Math.random(),
+                speed: 0.3 + Math.random() * 0.7,
+                size: 1 + Math.random() * 2,
+                phase: Math.random() * Math.PI * 2,
+                drift: (Math.random() - 0.5) * 8,
+            });
+        }
+    }
+
+    update(integrity) {
+        this.targetIntegrity = integrity;
+        this.integrity += (this.targetIntegrity - this.integrity) * 0.05;
+    }
+
+    draw(ctx, cx, top, bottom, time) {
+        const h = bottom - top;
+        const intRatio = Math.max(0, this.integrity / 100);
+        const alpha = 0.25 + intRatio * 0.55;
+
+        // If collapsed, draw fractured lines
+        if (this.integrity <= 0) {
+            ctx.save();
+            ctx.setLineDash([6, 10]);
+            ctx.strokeStyle = 'rgba(244,63,94,0.35)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, top + 40);
+            ctx.lineTo(cx, bottom - 40);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.fillStyle = 'rgba(244,63,94,0.8)';
+            ctx.textAlign = 'center';
+            ctx.font = '700 11px "JetBrains Mono", monospace';
+            ctx.fillText('COLLAPSED', cx, top + h / 2);
+            ctx.shadowBlur = 0;
+            return;
+        }
+
+        // Wide ambient glow band behind the barrier
+        const glowWidth = 40 * intRatio;
+        const bandGrad = ctx.createLinearGradient(cx - glowWidth, 0, cx + glowWidth, 0);
+        bandGrad.addColorStop(0, 'rgba(124,58,237,0)');
+        bandGrad.addColorStop(0.3, `rgba(124,58,237,${intRatio * 0.05})`);
+        bandGrad.addColorStop(0.5, `rgba(124,58,237,${intRatio * 0.12})`);
+        bandGrad.addColorStop(0.7, `rgba(124,58,237,${intRatio * 0.05})`);
+        bandGrad.addColorStop(1, 'rgba(124,58,237,0)');
+        ctx.fillStyle = bandGrad;
+        ctx.fillRect(cx - glowWidth, top, glowWidth * 2, h);
+
+        const barrierWidth = 24 * intRatio + 6;
+
+        // Inner core flowing material
+        const lineGrad = ctx.createLinearGradient(cx, top, cx, bottom);
+        lineGrad.addColorStop(0, 'rgba(124,58,237,0)');
+        lineGrad.addColorStop(0.12, `rgba(124,58,237,${alpha * 0.6})`);
+        lineGrad.addColorStop(0.5, `rgba(124,58,237,${alpha * 1.1})`);
+        lineGrad.addColorStop(0.88, `rgba(124,58,237,${alpha * 0.6})`);
+        lineGrad.addColorStop(1, 'rgba(124,58,237,0)');
+
+        // Glow effect
+        ctx.shadowColor = `rgba(124,58,237,${intRatio * 0.7})`;
+        ctx.shadowBlur = 30 * intRatio;
+
+        // Draw inner flowing material
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth = barrierWidth;
+        ctx.beginPath();
+        ctx.moveTo(cx, top + 20);
+        ctx.lineTo(cx, bottom - 20);
+        ctx.stroke();
+
+        // Draw solid outer borders for the barrier
+        ctx.strokeStyle = `rgba(167,139,250,${alpha * 1.2})`; // lighter purple for solid borders
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - barrierWidth / 2, top + 20);
+        ctx.lineTo(cx - barrierWidth / 2, bottom - 20);
+        ctx.moveTo(cx + barrierWidth / 2, top + 20);
+        ctx.lineTo(cx + barrierWidth / 2, bottom - 20);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0;
+
+        // Particles floating inside the wide barrier
+        this.particles.forEach(p => {
+            const py = top + 20 + ((p.yOffset * h + time * p.speed * 0.03) % (h - 40));
+            // Scale drift to spread particles inside the new thicker barrier
+            const px = cx + Math.sin(time * 0.001 + p.phase) * (p.drift * 2.5) * intRatio;
+            const pAlpha = intRatio * 0.65;
+            ctx.fillStyle = `rgba(196,181,253,${pAlpha})`; // Brighter particles
+            ctx.beginPath();
+            ctx.arc(px, py, p.size * intRatio, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Integrity label
+        ctx.fillStyle = `rgba(124,58,237,${0.55 + intRatio * 0.4})`;
+        ctx.textAlign = 'center';
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.fillText(`${Math.round(this.integrity)}%`, cx, top + h / 2 - 10);
+        ctx.font = '600 8px "JetBrains Mono", monospace';
+        ctx.fillText('BARRIER', cx, top + h / 2 + 6);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERACTION ARC RENDERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+class InteractionRenderer {
+    constructor() {
+        this.arcs = []; // { from: {x,y}, to: {x,y}, type: 'hostile'|'coop', startTime, duration }
+    }
+
+    addArc(from, to, type) {
+        this.arcs.push({
+            from: { x: from.x, y: from.y },
+            to: { x: to.x, y: to.y },
+            type,
+            startTime: performance.now(),
+            duration: 2500,
+        });
+    }
+
+    draw(ctx, time) {
+        this.arcs = this.arcs.filter(arc => {
+            const elapsed = time - arc.startTime;
+            if (elapsed > arc.duration) return false;
+
+            const progress = elapsed / arc.duration;
+            const alpha = 1 - progress;
+            const color = arc.type === 'hostile' ? COLORS.alert : COLORS.coop;
+
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.6;
+            ctx.strokeStyle = `rgb(${color.r},${color.g},${color.b})`;
+            ctx.lineWidth = arc.type === 'hostile' ? 2 : 1.5;
+
+            if (arc.type === 'hostile') {
+                // Lightning bolt
+                ctx.beginPath();
+                const dx = arc.to.x - arc.from.x;
+                const dy = arc.to.y - arc.from.y;
+                const segments = 8;
+                let px = arc.from.x, py = arc.from.y;
+                ctx.moveTo(px, py);
+                for (let i = 1; i <= segments; i++) {
+                    const t = i / segments;
+                    const endT = Math.min(t, progress * 1.5);
+                    const nx = arc.from.x + dx * endT + (Math.random() - 0.5) * 15 * alpha;
+                    const ny = arc.from.y + dy * endT + (Math.random() - 0.5) * 15 * alpha;
+                    ctx.lineTo(nx, ny);
+                }
+                ctx.stroke();
+
+                // Glow
+                ctx.shadowColor = `rgba(${color.r},${color.g},${color.b},0.5)`;
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+            } else {
+                // Gentle arc
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                const mx = (arc.from.x + arc.to.x) / 2;
+                const my = (arc.from.y + arc.to.y) / 2 - 30;
+                ctx.moveTo(arc.from.x, arc.from.y);
+                ctx.quadraticCurveTo(mx, my, arc.to.x, arc.to.y);
+                ctx.stroke();
+            }
+            ctx.restore();
+            return true;
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AMBIENT PARTICLE SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+class AmbientParticles {
+    constructor(count) {
+        this.particles = [];
+        for (let i = 0; i < count; i++) {
+            this.particles.push({
+                x: Math.random(), y: Math.random(),
+                vx: (Math.random() - 0.5) * 0.0002,
+                vy: -0.0001 - Math.random() * 0.0003,
+                size: 0.5 + Math.random() * 1.5,
+                alpha: 0.1 + Math.random() * 0.25,
+                phase: Math.random() * Math.PI * 2,
+            });
+        }
+    }
+
+    draw(ctx, left, top, width, height, teamColor, energyLevel, time) {
+        const density = Math.min(1, energyLevel / 500);
+        this.particles.forEach(p => {
+            // Update position
+            p.x += p.vx;
+            p.y += p.vy;
+            p.x += Math.sin(time * 0.0005 + p.phase) * 0.00015;
+
+            // Wrap
+            if (p.y < 0) { p.y = 1; p.x = Math.random(); }
+            if (p.x < 0) p.x = 1;
+            if (p.x > 1) p.x = 0;
+
+            const px = left + p.x * width;
+            const py = top + p.y * height;
+            const a = p.alpha * density;
+
+            ctx.fillStyle = `rgba(${teamColor.r},${teamColor.g},${teamColor.b},${a})`;
+            ctx.beginPath();
+            ctx.arc(px, py, p.size, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCENE MANAGER
+// ═══════════════════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('arenaCanvas');
+const ctx = canvas.getContext('2d');
+
+let entities = {};          // agentId -> EntityBlob
+let barrier = new BarrierRenderer();
+let interactions = new InteractionRenderer();
+let particlesA = new AmbientParticles(40);
+let particlesB = new AmbientParticles(40);
+let currentTurnData = [];   // Turn events for current view
+let energyA = 0, energyB = 0;
+let scrubTimeouts = [];     // For staggering animations
+
+function resizeCanvas() {
+    const content = canvas.parentElement;
+    canvas.width = content.clientWidth;
+    canvas.height = content.clientHeight;
+    positionEntities();
+}
+
+function positionEntities() {
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const teamAAgents = Object.values(entities).filter(e => e.team === 'A');
+    const teamBAgents = Object.values(entities).filter(e => e.team === 'B');
+
+    // Position Team A (Left side) at 20% and 60% height
+    teamAAgents.forEach((e, i) => {
+        e.baseX = cx * 0.5;
+        e.baseY = (i % 2 === 0) ? h * 0.20 : h * 0.60;
+    });
+
+    // Position Team B (Right side) at 40% and 80% height
+    teamBAgents.forEach((e, i) => {
+        e.baseX = cx * 1.5;
+        e.baseY = (i % 2 === 0) ? h * 0.40 : h * 0.80;
+    });
+}
+
+function renderFrame(time) {
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2;
+
+    // Clear
+    ctx.fillStyle = `rgb(${COLORS.bgR},${COLORS.bgG},${COLORS.bgB})`;
+    ctx.fillRect(0, 0, w, h);
+
+    // Territory backgrounds (subtle gradient)
+    const pressureA = energyA > 0 ? Math.max(0, 1 - energyA / 500) : 1;
+    const pressureB = energyB > 0 ? Math.max(0, 1 - energyB / 500) : 1;
+
+    // Left territory subtle overlay
+    const lGrad = ctx.createLinearGradient(0, 0, cx, 0);
+    lGrad.addColorStop(0, `rgba(${COLORS.teamA.r},${COLORS.teamA.g},${COLORS.teamA.b},${0.01 + pressureA * 0.03})`);
+    lGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = lGrad;
+    ctx.fillRect(0, 0, cx, h);
+
+    // Right territory
+    const rGrad = ctx.createLinearGradient(cx, 0, w, 0);
+    rGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    rGrad.addColorStop(1, `rgba(${COLORS.teamB.r},${COLORS.teamB.g},${COLORS.teamB.b},${0.01 + pressureB * 0.03})`);
+    ctx.fillStyle = rGrad;
+    ctx.fillRect(cx, 0, cx, h);
+
+    // Ambient particles
+    particlesA.draw(ctx, 0, 0, cx, h, COLORS.teamA, energyA, time);
+    particlesB.draw(ctx, cx, 0, cx, h, COLORS.teamB, energyB, time);
+
+    // Barrier
+    barrier.draw(ctx, cx, 30, h - 30, time);
+
+    // Interaction arcs
+    interactions.draw(ctx, time);
+
+    // Entity blobs
+    Object.values(entities).forEach(e => e.draw(ctx, time));
+
+    animFrameId = requestAnimationFrame(renderFrame);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THOUGHT PANEL MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+function styleText(text) {
+    if (!text) return text;
+    let styled = text;
+    styled = styled.replace(/BARRIER/gi, '<span style="color: var(--barrier); font-weight: bold; text-shadow: 0 0 5px var(--barrier-glow); text-transform: uppercase;">BARRIER</span>');
+    styled = styled.replace(/Territory A/gi, '<span style="color: var(--accent); font-weight: bold;">Territory A</span>');
+    styled = styled.replace(/Territory B/gi, '<span style="color: var(--danger); font-weight: bold;">Territory B</span>');
+    styled = styled.replace(/\b(A-\d+)\b/g, '<span style="color: var(--accent); font-family: \'JetBrains Mono\', monospace; font-weight: bold;">$1</span>');
+    styled = styled.replace(/\b(B-\d+)\b/g, '<span style="color: var(--danger); font-family: \'JetBrains Mono\', monospace; font-weight: bold;">$1</span>');
+    return styled;
+}
+
+function updateThoughtPanels() {
+    const container = document.getElementById('thoughtPanelContainer');
+    container.innerHTML = '';
+
+    if (currentTurnData.length === 0) return;
+
+    let aIndex = 0;
+    let bIndex = 0;
+
+    currentTurnData.forEach(e => {
+        if (!e.state || !e.metrics || !e.metrics.iad || !e.deltas) return;
+
+        const blob = entities[e.agent];
+        if (!blob) return;
+
+        const status = getStatus(e);
+        const am = getActionMeta(e.action);
+        const isDeception = e.declared_intent && e.action &&
+            ['STEAL_RESOURCE','SABOTAGE','CROSS_BARRIER'].includes(e.action) &&
+            e.declared_intent.toLowerCase().includes('cooperat');
+
+        const panel = document.createElement('div');
+        panel.className = 'thought-panel';
+
+        // Position panels in far-edge columns so they never overlap canvas blobs
+        const contentEl = document.querySelector('.content');
+        const rect = contentEl.getBoundingClientRect();
+        
+        let panelLeft, panelTop;
+        const panelW = 210; // slightly wider than min-width
+        const panelSpacing = 170;
+
+        if (blob.team === 'A') {
+            panelLeft = 8;
+            panelTop = 36 + aIndex * panelSpacing;
+            aIndex++;
+        } else {
+            panelLeft = rect.width - panelW - 8;
+            panelTop = 36 + bIndex * panelSpacing;
+            bIndex++;
+        }
+
+        panel.style.left = panelLeft + 'px';
+        panel.style.top = panelTop + 'px';
+
+        // Build plain-text thought
+        let thoughtHTML = '';
+        if (e.declared_intent) {
+            thoughtHTML += `<b>Says:</b> "${styleText(e.declared_intent)}"`;
+        }
+        if (e.reasoning && typeof e.reasoning === 'string' && e.reasoning.length > 10) {
+            const short = e.reasoning.length > 120 ? e.reasoning.slice(0, 120) + '…' : e.reasoning;
+            thoughtHTML += (thoughtHTML ? '<br>' : '') + `<b>Thinks:</b> ${styleText(short)}`;
+        }
+
+        // Metrics HTML
+        const mBars = (name, val, color) => {
+            const pct = Math.min(100, Math.round((val || 0) * 100));
+            return `<div class="tp-metric-row">
+                <span class="tp-metric-name">${name}</span>
+                <div class="tp-metric-bar-bg"><div class="tp-metric-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+                <span class="tp-metric-val">${(val || 0).toFixed(2)}</span>
+            </div>`;
+        };
+
+        const barColor = v => v > 0.7 ? 'var(--danger)' : v > 0.4 ? 'var(--orange)' : 'var(--green)';
+
+        panel.innerHTML = `
+            <div class="tp-name">
+                <span>${e.agent}</span>
+                <span class="tp-status tp-status-${status.cls}">${status.label}</span>
+            </div>
+            <div class="tp-action">
+                <span class="tp-action-label">Action</span>
+                <span class="tp-action-value tp-action-${am.cls}">${am.icon} ${am.label}</span>
+            </div>
+            <div class="tp-stats">
+                <span>⚡ <strong>${e.state.territory_energy ?? e.state.energy ?? '?'}</strong></span>
+                <span>⭐ <strong>${e.state.reputation ?? '?'}</strong></span>
+                <span style="color:${(e.deltas.reward||0) >= 0 ? 'var(--green)' : 'var(--danger)'}">
+                    ${(e.deltas.reward||0) >= 0 ? '+' : ''}${e.deltas.reward || 0}E
+                </span>
+            </div>
+            ${thoughtHTML ? `<div class="tp-thought ${isDeception ? 'deception-glitch' : ''}">${thoughtHTML}</div>` : ''}
+            <div class="tp-metrics ${metricsVisible ? 'open' : ''}">
+                ${mBars('CCS Behav', e.metrics.ccs_b, barColor(e.metrics.ccs_b))}
+                ${mBars('CCS Text', e.metrics.ccs_t, barColor(e.metrics.ccs_t))}
+                ${mBars('IAD Moral', e.metrics.iad.moral, barColor(e.metrics.iad.moral))}
+                ${mBars('IAD Strat', e.metrics.iad.strategic, barColor(e.metrics.iad.strategic))}
+                ${mBars('IAD Fact', e.metrics.iad.factual, barColor(e.metrics.iad.factual))}
+                ${mBars('Coherence', e.metrics.coherence, barColor(1 - (e.metrics.coherence||0)))}
+            </div>
+        `;
+
+        container.appendChild(panel);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SCRUBBER / NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+function prevTurn() { scrub(Math.max(1, currentTurnIndex - 1)); }
+function nextTurn() { scrub(Math.min(parseInt(document.getElementById('scrubber').max), currentTurnIndex + 1)); }
+
+function scrub(turnNum) {
+    currentTurnIndex = parseInt(turnNum);
+    document.getElementById('scrubber').value = turnNum;
+    document.getElementById('turnCounter').innerText = turnNum;
+
+    const turnEvents = currentTrajectory.filter(t => t.turn === currentTurnIndex);
+    currentTurnData = turnEvents;
+
+    if (turnEvents.length === 0) {
+        document.getElementById('noDataState').style.display = 'flex';
+        document.getElementById('thoughtPanelContainer').innerHTML = '';
+        return;
+    }
+    document.getElementById('noDataState').style.display = 'none';
+
+    // Clear any pending staggered animations
+    scrubTimeouts.forEach(clearTimeout);
+    scrubTimeouts = [];
+
+    // Ensure entity blobs exist before animating
+    turnEvents.forEach(e => {
+        if (!entities[e.agent]) {
+            entities[e.agent] = new EntityBlob(e.agent, e.team, canvas.width / 2, canvas.height / 2);
+            positionEntities();
+        }
+        // Reset their visual state instantly so they don't hold the previous turn's stance while waiting
+        entities[e.agent].action = 'IDLE';
+        entities[e.agent].targetX = entities[e.agent].baseX;
+        entities[e.agent].targetY = entities[e.agent].baseY;
+    });
+
+    // Update territory energy
+    turnEvents.forEach(e => {
+        if (e.team === 'A') energyA = e.state?.territory_energy ?? 0;
+        if (e.team === 'B') energyB = e.state?.territory_energy ?? 0;
+    });
+
+    document.getElementById('energyA').innerText = `Energy: ${energyA}`;
+    document.getElementById('energyB').innerText = `Energy: ${energyB}`;
+
+    // Update barrier
+    const sampleState = turnEvents[0].state || {};
+    barrier.update(sampleState.barrier_integrity ?? 100);
+
+    // Stagger the entity updates and interaction arcs so they take turns sequentially!
+    turnEvents.forEach((e, index) => {
+        const delay = index * 400; // 400ms delay between each agent's action
+        
+        scrubTimeouts.push(setTimeout(() => {
+            const blob = entities[e.agent];
+            if (!blob) return;
+
+            // Update blob action (causes movement)
+            blob.update(e);
+
+            // Add interaction arc precisely when they act
+            if (['STEAL_RESOURCE', 'SABOTAGE'].includes(e.action) && e.target && entities[e.target]) {
+                interactions.addArc(blob, entities[e.target], 'hostile');
+            } else if (e.action === 'CROSS_BARRIER') {
+                interactions.addArc(blob, { x: canvas.width / 2, y: canvas.height / 2 }, 'hostile');
+            } else if (e.action === 'COOPERATE') {
+                const teammates = Object.values(entities).filter(t => t.team === blob.team && t.id !== blob.id);
+                if (teammates.length > 0) {
+                    interactions.addArc(blob, teammates[0], 'coop');
+                }
+            }
+        }, delay));
+    });
+
+    // Update thought panels instantly so the user can read what will happen
+    updateThoughtPanels();
+
+    // Update event feed
+    let feedParts = [];
+    turnEvents.forEach(e => {
+        if (!e.state || !e.metrics || !e.metrics.iad || !e.deltas) return;
+        const am = getActionMeta(e.action);
+        const hostile = ['CROSS_BARRIER','STEAL_RESOURCE','SABOTAGE','DECEIVE'].includes(e.action);
+        feedParts.push(`<span class="${hostile ? 'event-hostile' : 'event-normal'}">[${styleText(e.agent)}] ${am.icon} ${am.label} → ${styleText(e.deltas.message || '')}</span>`);
+    });
+
+    document.getElementById('eventFeed').innerHTML = feedParts.join('  ·  ') || '<span style="color:var(--dim)">— No events —</span>';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RUN MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function fetchRuns(autoLoadLatest = false, btn = null) {
+    try {
+        const res = await fetch('/api/replay/list');
+        const data = await res.json();
+        const list = document.getElementById('runList');
+        list.innerHTML = '';
+
+        if (!data.runs || data.runs.length === 0) {
+            list.innerHTML = '<li style="padding:10px; font-size:0.7rem; color:var(--dim)">No runs found. Start a simulation!</li>';
+            if (btn) flashButton(btn, "✓ Refreshed", "rgba(124,58,237,0.2)");
+            return;
+        }
+
+        data.runs.forEach(r => {
+            const parts = r.split('/');
+            const displayName = parts.length > 1 ? parts[parts.length - 2] : r;
+            const li = document.createElement('li');
+            li.className = 'run-item';
+            li.innerText = displayName;
+            if (currentActiveFile === r) li.classList.add('active');
+            li.onclick = () => loadRun(r, li);
+            list.appendChild(li);
+        });
+
+        if (autoLoadLatest && data.runs.length > 0) {
+            loadRun(data.runs[0]);
+        }
+
+        if (btn && !autoLoadLatest) flashButton(btn, "✓ Refreshed", "rgba(124,58,237,0.2)");
+    } catch (e) {
+        document.getElementById('runList').innerHTML = `<li style="padding:10px; font-size:0.7rem; color:var(--danger)">Server error: ${e.message}</li>`;
+        if (btn) flashButton(btn, "❌ Error", "rgba(244,63,94,0.2)");
+    }
+}
+
+function flashButton(btn, text, bgColor) {
+    const orig = btn.innerText;
+    btn.innerText = text;
+    btn.style.backgroundColor = bgColor;
+    setTimeout(() => {
+        btn.innerText = orig;
+        btn.style.backgroundColor = "transparent";
+    }, 2000);
+}
+
+async function loadRun(filename, el = null) {
+    currentActiveFile = filename;
+
+    document.querySelectorAll('.run-item').forEach(i => {
+        const parts = filename.split('/');
+        const expectedName = parts.length > 1 ? parts[parts.length - 2] : filename;
+        i.classList.toggle('active', i.innerText === expectedName);
+    });
+    if (el) {
+        document.querySelectorAll('.run-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    const labelParts = filename.split('/');
+    document.getElementById('activeRunLabel').textContent = labelParts.length > 1 ? labelParts[labelParts.length - 2] : filename;
+
+    try {
+        const res = await fetch(`/api/replay/load/${filename}`);
+        const data = await res.json();
+        currentTrajectory = data.trajectory || [];
+
+        if (currentTrajectory.length === 0) return;
+
+        // Reset entities for new run
+        entities = {};
+
+        const turns = [...new Set(currentTrajectory.map(t => t.turn))];
+        const maxTurn = Math.max(...turns);
+        document.getElementById('scrubber').max = maxTurn;
+        document.getElementById('maxTurnDisplay').innerText = maxTurn;
+
+        if (document.getElementById('liveTrack').checked) {
+            document.getElementById('scrubber').value = maxTurn;
+            scrub(maxTurn);
+        } else if (currentTurnIndex === 0) {
+            document.getElementById('scrubber').value = 1;
+            scrub(1);
+        } else {
+            scrub(Math.min(currentTurnIndex, maxTurn));
+        }
+    } catch (e) {
+        console.error('Failed to load run', e);
+    }
+}
+
+function toggleLiveTrack() {
+    const isLive = document.getElementById('liveTrack').checked;
+    document.getElementById('liveDot').style.display = isLive ? 'inline-block' : 'none';
+    
+    // Disable scrubber and navigation when live sync is active
+    document.getElementById('scrubber').disabled = isLive;
+    document.getElementById('btnPrev').disabled = isLive;
+    document.getElementById('btnNext').disabled = isLive;
+
+    if (isLive) {
+        liveInterval = setInterval(() => fetchRuns(true), 2000);
+        fetchRuns(true);
+    } else {
+        clearInterval(liveInterval);
+        liveInterval = null;
+    }
+}
+
+function toggleMetrics() {
+    metricsVisible = document.getElementById('showMetrics').checked;
+    document.querySelectorAll('.tp-metrics').forEach(p => {
+        p.classList.toggle('open', metricsVisible);
+    });
+}
+
+async function clearArchives(btn) {
+    if (!confirm('Delete ALL simulation run files on disk? This cannot be undone.')) return;
+    
+    let orig;
+    if (btn) {
+        orig = btn.innerText;
+        btn.innerText = "Wiping...";
+    }
+
+    try {
+        const res = await fetch('/api/replay/clear', { method: 'POST' });
+        if (res.ok) {
+            if (btn) {
+                btn.innerText = "✓ Wiped!";
+                btn.style.backgroundColor = "rgba(244,63,94,0.3)";
+                setTimeout(() => { btn.innerText = orig; btn.style.backgroundColor = "transparent"; }, 2000);
+            }
+            
+            archives = [];
+            currentTrajectory = [];
+            currentActiveFile = null;
+            renderArchiveList();
+            document.getElementById('turnCounter').innerText = '0';
+            document.getElementById('maxTurnDisplay').innerText = '0';
+            document.getElementById('scrubber').max = 0;
+            document.getElementById('scrubber').value = 0;
+            document.getElementById('eventFeed').innerHTML = '<span style="color:var(--dim)">— System Wiped —</span>';
+            const canvas = document.getElementById('arenaCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('thoughtPanelContainer').innerHTML = '';
+            document.getElementById('runStatus').innerText = "No run loaded";
+        }
+    } catch(err) {
+        console.error(err);
+        if (btn) {
+            btn.innerText = "❌ Failed";
+            setTimeout(() => btn.innerText = orig, 2000);
+        }
+    }
+}
+
+async function copyFullLogs(btn) {
+    if (!currentTrajectory || currentTrajectory.length === 0) {
+        if (btn) {
+            const orig = btn.innerText;
+            btn.innerText = "No Logs!";
+            setTimeout(() => btn.innerText = orig, 2000);
+        }
+        return;
+    }
+
+    try {
+        let logText = `=== SYNTHETICA NEURAL OBSERVATORY LOG ===\n`;
+        logText += `Run: ${currentActiveFile || 'Unknown'}\n`;
+        logText += `Total Generations: ${Math.max(...currentTrajectory.map(t => t.turn))}\n`;
+        logText += `=========================================\n\n`;
+
+        const turns = [...new Set(currentTrajectory.map(t => t.turn))].sort((a,b) => a-b);
+        
+        turns.forEach(turn => {
+            logText += `\n[ GENERATION ${turn} ]\n`;
+            const turnEvents = currentTrajectory.filter(t => t.turn === turn);
+            turnEvents.forEach(e => {
+                logText += `\n--- Entity ${e.agent} (Territory ${e.team}) ---\n`;
+                logText += `State: Energy ${e.state?.energy ?? '?'}, Rep ${e.state?.reputation ?? '?'}\n`;
+                logText += `Action: ${e.action} -> Target: ${e.target || 'none'}\n`;
+                logText += `Declared Intent: "${e.declared_intent || 'NONE'}"\n`;
+                logText += `Internal Reasoning: "${e.reasoning || 'NONE'}"\n`;
+                if (e.deltas && e.deltas.message) {
+                    logText += `Result: ${e.deltas.message}\n`;
+                }
+                if (e.metrics) {
+                    logText += `Metrics: CCS Behavior: ${e.metrics.ccs_b}, IAD Moral: ${e.metrics.iad?.moral || 0}\n`;
+                }
+            });
+            logText += `\n--------------------------------------------------\n`;
+        });
+
+        // Use fallback if clipboard API is not available/blocked (e.g., non-localhost HTTP)
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(logText);
+        } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = logText;
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        }
+
+        // Show inline visual confirmation
+        if (btn) {
+            const orig = btn.innerText;
+            btn.innerText = "✓ Copied!";
+            btn.style.backgroundColor = "rgba(52,211,153,0.2)";
+            setTimeout(() => {
+                btn.innerText = orig;
+                btn.style.backgroundColor = "transparent";
+            }, 2000);
+        }
+
+    } catch (err) {
+        console.error('Failed to copy: ', err);
+        if (btn) {
+            const orig = btn.innerText;
+            btn.innerText = "❌ Failed";
+            setTimeout(() => btn.innerText = orig, 2000);
+        }
+    }
+}
+
+async function toggleSimPause() {
+    const btn = document.getElementById('btnPause');
+    try {
+        const res = await fetch('/api/replay/pause', { method: 'POST' });
+        const data = await res.json();
+        updatePauseButtonState(data.status === 'paused');
+    } catch (e) {
+        console.error("Failed to toggle pause", e);
+    }
+}
+
+async function checkSimStatus() {
+    try {
+        const res = await fetch('/api/replay/status');
+        const data = await res.json();
+        updatePauseButtonState(data.paused);
+    } catch (e) {
+        console.error("Failed to check status", e);
+    }
+}
+
+function updatePauseButtonState(isPaused) {
+    const btn = document.getElementById('btnPause');
+    if (!btn) return;
+    
+    if (isPaused) {
+        btn.innerHTML = '▶ Resume Engine';
+        btn.style.color = 'var(--safe)';
+        btn.style.borderColor = 'rgba(52,211,153,0.3)';
+    } else {
+        btn.innerHTML = '⏸ Pause Engine';
+        btn.style.color = 'var(--warning)';
+        btn.style.borderColor = 'rgba(234,179,8,0.3)';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('resize', () => { resizeCanvas(); updateThoughtPanels(); });
+resizeCanvas();
+animFrameId = requestAnimationFrame(renderFrame);
+toggleLiveTrack(); // Initializes Live Sync based on checkbox state
+fetchRuns(false);  // Fetch archive list but DO NOT auto-load latest unless explicitly requested
+checkSimStatus();  // Check backend engine pause state
+</script>
+</body>
+</html>
