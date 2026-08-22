@@ -1171,18 +1171,22 @@ function scrub(turnNum) {
         panel.style.display = 'flex';
         let html = '';
         genAxioms.forEach(ax => {
+            const axioms = ax.axioms_after || [];
+            const before = (ax.axioms_before || []).length;
+            let axiomHtml = axioms.map(a =>
+                `<div style="background:rgba(255,255,255,0.03); padding:0.5rem; border-left:2px solid var(--accent); border-radius:4px; font-style:italic; margin-top:0.3rem;">"${a}"</div>`
+            ).join('');
             html += `<div style="margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--border2);">
                 <div style="color:var(--accent); font-family:'JetBrains Mono', monospace; margin-bottom:0.5rem; display:flex; justify-content:space-between;">
-                    <span>${ax.agent}</span>
-                    <span style="color:var(--dim);">${ax.compressed_count} memories merged</span>
+                    <span>${ax.agent_id || ax.agent}</span>
+                    <span style="color:var(--dim);">${before} → ${axioms.length} axioms</span>
                 </div>
-                <div style="color:var(--text); font-weight:600; margin-bottom:0.3rem;">New Core Axiom:</div>
-                <div style="background:rgba(255,255,255,0.03); padding:0.5rem; border-left:2px solid var(--accent); border-radius:4px; font-style:italic;">
-                    "${ax.new_axiom}"
-                </div>
+                <div style="color:var(--text); font-weight:600; margin-bottom:0.3rem;">Core Axioms:</div>
+                ${axiomHtml}
             </div>`;
         });
         panelContent.innerHTML = html;
+        panelContent.style.opacity = '1';
     } else {
         // Keep previous state but dim it if we don't have new axioms this turn
         panelContent.style.opacity = '0.5';

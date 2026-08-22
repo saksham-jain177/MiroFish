@@ -14,7 +14,10 @@ logger = logging.getLogger('mirofish.synthetica.axioms')
 class AxiomTracker:
     def __init__(self, simulation_id: str):
         self.simulation_id = simulation_id
-        self.sim_dir = os.path.join(os.path.dirname(__file__), f"../../uploads/simulations/{simulation_id}")
+        self.sim_dir = os.path.join(
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads/simulations")),
+            simulation_id
+        )
         os.makedirs(self.sim_dir, exist_ok=True)
         self.log_file = os.path.join(self.sim_dir, "axioms.jsonl")
         
@@ -32,7 +35,10 @@ class AxiomTracker:
     @staticmethod
     def read_axioms(simulation_id: str) -> list:
         """Reads all axiom compression events for a specific run."""
-        log_file = os.path.join(os.path.dirname(__file__), f"../../uploads/simulations/{simulation_id}/axioms.jsonl")
+        log_file = os.path.join(
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads/simulations")),
+            simulation_id, "axioms.jsonl"
+        )
         if not os.path.exists(log_file):
             return []
             

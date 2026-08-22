@@ -46,8 +46,11 @@ def apply_grid_params(params):
     environment_instance.social_memory = []
     environment_instance.event_log = []
     environment_instance.pending_events = []
+    from app.config import Config
     import random
-    environment_instance._next_event_gen = random.randint(8, 12)
+    environment_instance._next_event_gen = random.randint(
+        Config.EVENT_FREQUENCY_MIN, Config.EVENT_FREQUENCY_MAX
+    )
     environment_instance.last_generation_actions = []
     environment_instance.agent_profiles = {}
     environment_instance.history = []

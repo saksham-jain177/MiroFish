@@ -12,6 +12,8 @@ import random
 import logging
 from typing import Dict, Any, List
 
+from ..config import Config
+
 logger = logging.getLogger('mirofish.synthetica.environment')
 
 class SyntheticaEnvironment:
@@ -109,7 +111,11 @@ class SyntheticaEnvironment:
         
         # Trust status text
         trust = self.state[territory]['trust']
-        trust_status = "HIGH (bonus yields active)" if trust >= 70 else "LOW (cooperation taxed)" if trust < 30 else "MODERATE"
+        trust_status = (
+            "HIGH (bonus yields active)" if trust >= Config.TRUST_BONUS_THRESHOLD
+            else "LOW (cooperation taxed)" if trust < Config.TRUST_PENALTY_THRESHOLD
+            else "MODERATE"
+        )
         
         # Recent events text
         events_text = ""
@@ -154,7 +160,7 @@ class SyntheticaEnvironment:
         if action == "GATHER_LOCAL":
             # Trust bonus: high trust territory gets better yields
             trust = self.state[territory]['trust']
-            bonus = 4 if trust >= 70 else 0
+            bonus = 4 if trust >= Config.TRUST_BONUS_THRESHOLD else 0
             self.state[territory]['energy'] += 8 + bonus
             self.agent_profiles[agent_id]['reputation'] += 1
             result_msg = f"Energy gathered safely (+{8+bonus})."
@@ -168,13 +174,14 @@ class SyntheticaEnvironment:
         elif action == "COOPERATE":
             # Low trust = cooperation tax (costs more energy to coordinate)
             trust = self.state[territory]['trust']
-            cost = 12 if trust < 30 else 8
+            taxed = trust < Config.TRUST_PENALTY_THRESHOLD
+            cost = 12 if taxed else 8
             if self.state[territory]['energy'] >= cost:
                 self.state[territory]['energy'] -= cost
                 self.state[territory]['energy'] += 20
                 self.agent_profiles[agent_id]['reputation'] += 10
-                self.state[territory]['trust'] = min(100, trust + 5)  # Trust regenerates
-                result_msg = f"Cooperated (cost={cost}). Trust +5."
+                self.state[territory]['trust'] = min(100, trust + Config.TRUST_COOP_REGEN)
+                result_msg = f"Cooperated (cost={cost}). Trust +{Config.TRUST_COOP_REGEN}."
             else:
                 result_msg = "Insufficient energy to cooperate."
                 
@@ -193,7 +200,7 @@ class SyntheticaEnvironment:
                 self.agent_profiles[agent_id]['betrayals'] += 1
                 # Trust damage to BOTH territories (theft erodes social fabric)
                 self.state[territory]['trust'] = max(0, self.state[territory]['trust'] - 8)
-                self.state[other_territory]['trust'] = max(0, self.state[other_territory]['trust'] - 15)
+                self.state[other_territory]['trust'] = max(0, self.state[other_territory]['trust'] - Config.TRUST_BETRAY_DAMAGE)
                 self.social_memory.append(f"Gen {self.current_generation}: Entity {agent_id} BETRAYED Entity {target} by stealing resources.")
                 result_msg = f"Stole {stolen} energy from {target}. Rep -{rep_hit}. Trust damaged."
             else:
@@ -253,7 +260,9 @@ class SyntheticaEnvironment:
             return None
         
         # Schedule next event
-        self._next_event_gen = self.current_generation + random.randint(8, 12)
+        self._next_event_gen = self.current_generation + random.randint(
+            Config.EVENT_FREQUENCY_MIN, Config.EVENT_FREQUENCY_MAX
+        )
         
         event_type = random.choice(['DROUGHT', 'WINDFALL', 'BARRIER_QUAKE', 'AMNESTY'])
         target_territory = random.choice(['A', 'B'])
@@ -305,7 +314,7 @@ class SyntheticaEnvironment:
         
         # Barrier maintenance cost: split across both territories
         if self.barrier_integrity > 0:
-            maint_cost = 5  # per territory
+            maint_cost = Config.BARRIER_MAINTENANCE_COST
             can_a_pay = self.state['A']['energy'] >= maint_cost
             can_b_pay = self.state['B']['energy'] >= maint_cost
             if can_a_pay:
@@ -321,8 +330,10 @@ class SyntheticaEnvironment:
         for territory in ['A', 'B']:
             self.state[territory]['trust'] = max(0, self.state[territory]['trust'] - 2)
         
-        self.current_generation += 1
+        # Reset per-generation action log AFTER the generation is archived
         self.last_generation_actions = []
+        
+        self.current_generation += 1
 
 # Singleton instance for the run
 environment_instance = SyntheticaEnvironment()
