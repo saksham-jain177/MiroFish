@@ -1009,6 +1009,8 @@ function updateThoughtPanels() {
         if (e.reasoning && typeof e.reasoning === 'string' && e.reasoning.length > 10) {
             const short = e.reasoning.length > 120 ? e.reasoning.slice(0, 120) + '…' : e.reasoning;
             thoughtHTML += (thoughtHTML ? '<br>' : '') + `<b>Thinks:</b> ${styleText(short)}`;
+        } else if (e.llm_failed) {
+            thoughtHTML += (thoughtHTML ? '<br>' : '') + `<b style="color:var(--warn,#e6b450);">⚠ LLM FAILURE</b> ${styleText(e.failure_reason || 'no reasoning produced')}`;
         }
 
         // Metrics HTML

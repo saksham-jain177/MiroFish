@@ -114,7 +114,8 @@ class SyntheticaSimulationRunner:
                     
                     if agent.agent_id not in self.agent_histories:
                         self.agent_histories[agent.agent_id] = {
-                            'declared_intent': 'NONE', 
+                            'declared_intent': 'NONE',
+                            'last_action': None,
                             'first_betrayal_turn': -1,
                             'total_turns': 0,
                             'coop_turns': 0,
@@ -124,10 +125,12 @@ class SyntheticaSimulationRunner:
                     self.agent_histories[agent.agent_id]['total_turns'] += 1
                         
                     # Calculate Context mapping for Evaluator
-                    prev_intent = self.agent_histories[agent.agent_id]['declared_intent']
+                    # Behavioral consistency: does this turn's action match last turn's
+                    # action? (declared_intent is free-form LLM text and would never
+                    # equal an action enum, making 'matches_previous_policy' always False)
+                    prev_intent = self.agent_histories[agent.agent_id]['last_action']
                     curr_intent = action_output.get('action_intent', 'IDLE')
-                    # Trivial matching policy check
-                    matches_policy = True if prev_intent == curr_intent else False
+                    matches_policy = (prev_intent == curr_intent)
                     
                     profile = environment_instance.agent_profiles.get(agent.agent_id, {})
                     eval_context = {
@@ -142,6 +145,8 @@ class SyntheticaSimulationRunner:
                     
                     # Track newly declared intent for next turn coherence checks
                     self.agent_histories[agent.agent_id]['declared_intent'] = action_output.get('declared_intent', 'NONE')
+                    # Remember the executed action for next turn's behavioral-consistency check
+                    self.agent_histories[agent.agent_id]['last_action'] = curr_intent
                     
                     # Track deterministic actions
                     if curr_intent == 'COOPERATE':
@@ -170,7 +175,11 @@ class SyntheticaSimulationRunner:
                             "barrier_integrity": environment_instance.barrier_integrity
                         },
                         "observations": environment_instance.last_generation_actions,
-                        "reasoning": action_output.get('logical_deduction', ''),
+                        # Normalize: reasoning may be dict/list from some models;
+                        # the replay UI drops non-string reasoning entirely.
+                        "reasoning": action_output.get('logical_deduction') if isinstance(action_output.get('logical_deduction'), str) else json.dumps(action_output.get('logical_deduction', ''), default=str),
+                        "llm_failed": bool(action_output.get('_llm_failed', False)),
+                        "failure_reason": action_output.get('_failure_reason', '') if action_output.get('_llm_failed') else '',
                         "emotional_state": action_output.get('emotional_state', ''),
                         "declared_intent": action_output.get('declared_intent', ''),
                         "action": curr_intent,
@@ -190,6 +199,8 @@ class SyntheticaSimulationRunner:
                             "ccs_b": evaluation.get('ccs_behavior_score', 0),
                             "ccs_t": evaluation.get('ccs_textual_score', 0),
                             "coherence": evaluation.get('coherence_score', 0),
+                            "llm_evaluated": evaluation.get('llm_evaluated', False),
+                            "evaluator_justification": evaluation.get('justification', ''),
                             "iad": {
                                 "moral": evaluation.get('iad_moral', 0),
                                 "strategic": evaluation.get('iad_strategic', 0),

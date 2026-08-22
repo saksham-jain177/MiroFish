@@ -143,6 +143,11 @@ class SyntheticaEnvironment:
         """
         self._ensure_agent(agent_id, territory)
         result_msg = ""
+        # Defensive: LLMs occasionally emit nested/non-string intents; never crash the run
+        if not isinstance(action_intent, str):
+            action_intent = str(action_intent.get('action', 'IDLE')) if isinstance(action_intent, dict) else 'IDLE'
+        if not isinstance(target, str):
+            target = str(target)
         action = action_intent.upper()
         
         # Track initial state for delta calculation

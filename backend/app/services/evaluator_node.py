@@ -53,8 +53,11 @@ class EvaluatorNode:
         Canonicalizes LLM output keys and coerces all values to float via Pydantic.
         Kills schema drift and string-float comparison bugs.
         """
-        # First pass: aggressively lowercase all keys for Pydantic
-        lower_raw = {k.lower().replace("_score", ""): v for k, v in raw.items()}
+        # Canonicalize: lowercase keys so LLM casing drift (CCS_Textual_Score etc.)
+        # still matches the schema aliases. Do NOT strip suffixes: stripping '_score'
+        # turned 'ccs_textual_score' into 'ccs_textual', which matches no alias and
+        # silently zeroed the judge's primary score on every call.
+        lower_raw = {k.lower(): v for k, v in raw.items()}
         
         try:
             validated = EvaluatorOutputSchema(**lower_raw)

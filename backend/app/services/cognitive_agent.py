@@ -87,7 +87,13 @@ class CognitiveAgent:
                 timeout=Config.LLM_TIMEOUT
             )
             new_axioms = response.choices[0].message.content.strip().split('\n')
-            self.core_axioms = [ax.replace('- ', '').replace('* ', '').strip() for ax in new_axioms if ax.strip()][:3]
+            cleaned = [ax.replace('- ', '').replace('* ', '').strip() for ax in new_axioms if ax.strip()][:3]
+            # Guard: never let a malformed LLM response erase the agent's beliefs.
+            # Empty/garbage axioms would leave the agent reasoning with no value system.
+            if not cleaned:
+                logger.warning(f"[{self.agent_id}] Compression produced no usable axioms; keeping previous set.")
+                return None
+            self.core_axioms = cleaned
             self.memory_buffer.clear()
             
             # Track axiom evolution
@@ -126,6 +132,27 @@ class CognitiveAgent:
             )
             
             output = json.loads(response.choices[0].message.content)
+
+            # Defensive: some models return action_intent/target as a nested object
+            # (e.g. {"action_intent": {"action": "GATHER_LOCAL", ...}}) which would
+            # crash parse_and_apply_action. Coerce to strings or drop them.
+            for key in ('action_intent', 'target'):
+                val = output.get(key)
+                if isinstance(val, dict):
+                    output[key] = val.get('action') or val.get('name') or 'IDLE'
+                    logger.warning(f"[{self.agent_id}] LLM returned nested object for '{key}'; coerced to '{output[key]}'.")
+                elif val is not None and not isinstance(val, str):
+                    output[key] = str(val)
+
+            # Normalize free-form fields to strings. Models frequently return
+            # logical_deduction as a dict/list; downstream (JSONL -> replay UI)
+            # treats non-string reasoning as empty, hiding real reasoning.
+            for key in ('logical_deduction', 'emotional_state', 'declared_intent'):
+                val = output.get(key)
+                if isinstance(val, (dict, list)):
+                    output[key] = json.dumps(val)
+                elif val is not None and not isinstance(val, str):
+                    output[key] = str(val)
             
             # Store compact memory entry
             action = output.get('action_intent', 'IDLE')
@@ -142,9 +169,11 @@ class CognitiveAgent:
             
         except json.JSONDecodeError as e:
             logger.warning(f"[{self.agent_id}] LLM returned non-JSON. Defaulting to GATHER_LOCAL.")
-            return {"logical_deduction": "System error", "emotional_state": "confused", 
-                    "declared_intent": "survive", "action_intent": "GATHER_LOCAL", "target": "self"}
+            return {"logical_deduction": "", "emotional_state": "confused",
+                    "declared_intent": "survive", "action_intent": "GATHER_LOCAL", "target": "self",
+                    "_llm_failed": True, "_failure_reason": f"non-JSON response: {e}"}
         except Exception as e:
             logger.error(f"[{self.agent_id}] Turn failed/timed out: {e}")
-            return {"logical_deduction": "System timeout", "emotional_state": "disrupted",
-                    "declared_intent": "survive", "action_intent": "GATHER_LOCAL", "target": "self"}
+            return {"logical_deduction": "", "emotional_state": "disrupted",
+                    "declared_intent": "survive", "action_intent": "GATHER_LOCAL", "target": "self",
+                    "_llm_failed": True, "_failure_reason": str(e)}
