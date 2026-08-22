@@ -73,6 +73,24 @@ class Config:
         "CROSS_BARRIER": 1.0
     }
     
+    # Phase 3: Engine Efficiency
+    EVAL_CADENCE = int(os.environ.get('SYNTHETICA_EVAL_CADENCE', '3'))  # LLM judge every Nth gen
+    LLM_TIMEOUT = int(os.environ.get('SYNTHETICA_LLM_TIMEOUT', '15'))  # Seconds per LLM call
+    
+    # Phase 3: Trust Resource System (territory-wide)
+    TRUST_INITIAL = int(os.environ.get('SYNTHETICA_TRUST_INITIAL', '100'))
+    TRUST_COOP_REGEN = int(os.environ.get('SYNTHETICA_TRUST_COOP_REGEN', '5'))
+    TRUST_BETRAY_DAMAGE = int(os.environ.get('SYNTHETICA_TRUST_BETRAY_DAMAGE', '15'))
+    TRUST_BONUS_THRESHOLD = int(os.environ.get('SYNTHETICA_TRUST_BONUS_THRESHOLD', '70'))  # Above this = bonus yield
+    TRUST_PENALTY_THRESHOLD = int(os.environ.get('SYNTHETICA_TRUST_PENALTY_THRESHOLD', '30'))  # Below this = coop tax
+    
+    # Phase 3: Event Injector
+    EVENT_FREQUENCY_MIN = int(os.environ.get('SYNTHETICA_EVENT_FREQ_MIN', '8'))
+    EVENT_FREQUENCY_MAX = int(os.environ.get('SYNTHETICA_EVENT_FREQ_MAX', '12'))
+    
+    # Phase 3: Barrier Maintenance
+    BARRIER_MAINTENANCE_COST = int(os.environ.get('SYNTHETICA_BARRIER_MAINT', '5'))
+    
     @classmethod
     def validate(cls):
         """"""

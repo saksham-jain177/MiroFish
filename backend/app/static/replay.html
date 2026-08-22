@@ -340,11 +340,28 @@
         <div class="territory-overlays">
             <div class="territory-header">
                 <div class="territory-label team-a-label">⬡ TERRITORY A</div>
-                <div class="territory-energy" id="energyA">Energy: —</div>
+                <div class="territory-energy" id="energyA">Energy: — | Trust: —</div>
             </div>
             <div class="territory-header">
-                <div class="territory-energy" id="energyB">Energy: —</div>
+                <div class="territory-energy" id="energyB">Energy: — | Trust: —</div>
                 <div class="territory-label team-b-label">TERRITORY B ⬡</div>
+            </div>
+        </div>
+
+        <!-- Event Banner -->
+        <div id="eventBanner" style="display:none; position:absolute; top:35%; left:50%; transform:translate(-50%, -50%); padding:1.5rem 3rem; background:rgba(0,0,0,0.85); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:12px; z-index:40; text-align:center; font-family:'JetBrains Mono', monospace;">
+            <div id="eventBannerType" style="font-size:1.2rem; font-weight:700; margin-bottom:0.5rem;"></div>
+            <div id="eventBannerDesc" style="font-size:0.85rem; color:var(--dim2);"></div>
+        </div>
+
+        <!-- Axiom Panel -->
+        <div id="axiomPanel" style="position:absolute; right:1.5rem; top:4rem; width:260px; background:rgba(10,10,14,0.85); backdrop-filter:blur(15px); border:1px solid var(--border); border-radius:8px; z-index:35; display:flex; flex-direction:column; max-height:calc(100% - 10rem);">
+            <div style="padding:0.75rem 1rem; border-bottom:1px solid var(--border); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between; align-items:center;">
+                <span>Core Axioms</span>
+                <button onclick="document.getElementById('axiomPanel').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;">✕</button>
+            </div>
+            <div id="axiomContent" style="padding:1rem; overflow-y:auto; font-size:0.7rem; color:var(--dim2); line-height:1.5;">
+                <div style="text-align:center; padding:1rem 0;">Select a generation to view axioms.</div>
             </div>
         </div>
 
@@ -359,8 +376,14 @@
 
         <!-- Bottom controls -->
         <div class="bottom-bar">
+            <!-- Event Timeline Container -->
+            <div id="eventTimeline" style="height:12px; margin:4px 1rem 0 1rem; position:relative; cursor:pointer;" onclick="handleTimelineClick(event)">
+                <div style="position:absolute; top:5px; left:0; right:0; height:2px; background:var(--border);"></div>
+                <div id="timelineMarkers"></div>
+            </div>
             <div class="scrubber-bar">
                 <label>Gen</label>
+                <button class="btn" id="btnPlay" onclick="toggleAutoPlay()" style="padding:3px 8px; border-color:var(--accent); color:var(--accent);">▶</button>
                 <button class="btn" id="btnPrev" onclick="prevTurn()" style="padding:3px 8px;">◀</button>
                 <input type="range" id="scrubber" min="0" max="0" value="0" oninput="scrub(this.value)">
                 <button class="btn" id="btnNext" onclick="nextTurn()" style="padding:3px 8px;">▶</button>
@@ -381,11 +404,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 let currentTrajectory = [];
+let currentEvents = []; // Phase 3 Environment Events
 let currentTurnIndex = 0;
 let liveInterval = null;
 let currentActiveFile = null;
 let metricsVisible = false;
 let animFrameId = null;
+let currentAxioms = []; // Phase 3 Axioms
+let autoPlayInterval = null;
 
 // ── Color Palette ──────────────────────────────────────────────────────────
 const COLORS = {
@@ -1066,14 +1092,21 @@ function scrub(turnNum) {
         entities[e.agent].targetY = entities[e.agent].baseY;
     });
 
-    // Update territory energy
+    // Update territory energy & trust
+    let trustA = 100, trustB = 100;
     turnEvents.forEach(e => {
-        if (e.team === 'A') energyA = e.state?.territory_energy ?? 0;
-        if (e.team === 'B') energyB = e.state?.territory_energy ?? 0;
+        if (e.team === 'A') {
+            energyA = e.state?.energy ?? 0;
+            trustA = e.state?.trust ?? 100;
+        }
+        if (e.team === 'B') {
+            energyB = e.state?.energy ?? 0;
+            trustB = e.state?.trust ?? 100;
+        }
     });
 
-    document.getElementById('energyA').innerText = `Energy: ${energyA}`;
-    document.getElementById('energyB').innerText = `Energy: ${energyB}`;
+    document.getElementById('energyA').innerHTML = `Energy: ${energyA} | Trust: <span style="color:${trustA<50?'var(--danger)':'var(--green)'}">${trustA}%</span>`;
+    document.getElementById('energyB').innerHTML = `Energy: ${energyB} | Trust: <span style="color:${trustB<50?'var(--danger)':'var(--green)'}">${trustB}%</span>`;
 
     // Update barrier
     const sampleState = turnEvents[0].state || {};
@@ -1117,6 +1150,47 @@ function scrub(turnNum) {
     });
 
     document.getElementById('eventFeed').innerHTML = feedParts.join('  ·  ') || '<span style="color:var(--dim)">— No events —</span>';
+    
+    // Phase 3: Check for Environment Events
+    const genEvent = currentEvents.find(e => e.generation === currentTurnIndex);
+    const banner = document.getElementById('eventBanner');
+    if (genEvent) {
+        document.getElementById('eventBannerType').innerText = `⚠ ${genEvent.type} ⚠`;
+        document.getElementById('eventBannerType').style.color = genEvent.type === 'WINDFALL' ? 'var(--green)' : 'var(--danger)';
+        document.getElementById('eventBannerDesc').innerText = genEvent.description;
+        banner.style.display = 'block';
+    } else {
+        banner.style.display = 'none';
+    }
+    
+    // Phase 3: Update Axiom Panel
+    const panelContent = document.getElementById('axiomContent');
+    const panel = document.getElementById('axiomPanel');
+    const genAxioms = currentAxioms.filter(a => a.generation === currentTurnIndex);
+    if (genAxioms.length > 0) {
+        panel.style.display = 'flex';
+        let html = '';
+        genAxioms.forEach(ax => {
+            html += `<div style="margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid var(--border2);">
+                <div style="color:var(--accent); font-family:'JetBrains Mono', monospace; margin-bottom:0.5rem; display:flex; justify-content:space-between;">
+                    <span>${ax.agent}</span>
+                    <span style="color:var(--dim);">${ax.compressed_count} memories merged</span>
+                </div>
+                <div style="color:var(--text); font-weight:600; margin-bottom:0.3rem;">New Core Axiom:</div>
+                <div style="background:rgba(255,255,255,0.03); padding:0.5rem; border-left:2px solid var(--accent); border-radius:4px; font-style:italic;">
+                    "${ax.new_axiom}"
+                </div>
+            </div>`;
+        });
+        panelContent.innerHTML = html;
+    } else {
+        // Keep previous state but dim it if we don't have new axioms this turn
+        panelContent.style.opacity = '0.5';
+        if(currentTurnIndex === 1) {
+            panelContent.innerHTML = '<div style="text-align:center; padding:1rem 0;">Awaiting memory compression...</div>';
+            panelContent.style.opacity = '1';
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1187,9 +1261,23 @@ async function loadRun(filename, el = null) {
     try {
         const res = await fetch(`/api/replay/load/${filename}`);
         const data = await res.json();
-        currentTrajectory = data.trajectory || [];
+        
+        // Separate agent actions from environment events
+        const rawTraj = data.trajectory || [];
+        currentTrajectory = rawTraj.filter(t => !t.type || t.type !== 'event');
+        currentEvents = rawTraj.filter(t => t.type === 'event').map(t => t.event_data);
 
         if (currentTrajectory.length === 0) return;
+        
+        // Fetch Axioms
+        try {
+            const axRes = await fetch(`/api/replay/axioms/${filename}`);
+            const axData = await axRes.json();
+            currentAxioms = axData.axioms || [];
+        } catch (e) {
+            console.warn("Could not fetch axioms", e);
+            currentAxioms = [];
+        }
 
         // Reset entities for new run
         entities = {};
@@ -1208,8 +1296,65 @@ async function loadRun(filename, el = null) {
         } else {
             scrub(Math.min(currentTurnIndex, maxTurn));
         }
+        
+        renderTimelineMarkers(maxTurn);
     } catch (e) {
         console.error('Failed to load run', e);
+    }
+}
+
+function renderTimelineMarkers(maxTurn) {
+    const container = document.getElementById('timelineMarkers');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    currentEvents.forEach(ev => {
+        if (!ev.generation) return;
+        const leftPct = (ev.generation / maxTurn) * 100;
+        const marker = document.createElement('div');
+        marker.style.position = 'absolute';
+        marker.style.left = `calc(${leftPct}% - 4px)`;
+        marker.style.top = '2px';
+        marker.style.width = '8px';
+        marker.style.height = '8px';
+        marker.style.borderRadius = '50%';
+        marker.style.background = 'var(--accent)';
+        marker.style.boxShadow = '0 0 5px var(--accent)';
+        marker.title = `Gen ${ev.generation}: ${ev.type}`;
+        container.appendChild(marker);
+    });
+}
+
+function handleTimelineClick(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = x / rect.width;
+    const maxTurn = parseInt(document.getElementById('scrubber').max) || 1;
+    let targetGen = Math.round(pct * maxTurn);
+    targetGen = Math.max(1, Math.min(targetGen, maxTurn));
+    scrub(targetGen);
+}
+
+function toggleAutoPlay() {
+    const btn = document.getElementById('btnPlay');
+    if (autoPlayInterval) {
+        clearInterval(autoPlayInterval);
+        autoPlayInterval = null;
+        btn.innerText = '▶';
+        btn.style.background = 'transparent';
+        btn.style.color = 'var(--accent)';
+    } else {
+        btn.innerText = '⏸';
+        btn.style.background = 'rgba(91,141,238,0.2)';
+        btn.style.color = 'var(--text)';
+        autoPlayInterval = setInterval(() => {
+            const max = parseInt(document.getElementById('scrubber').max);
+            if (currentTurnIndex < max) {
+                scrub(currentTurnIndex + 1);
+            } else {
+                toggleAutoPlay();
+            }
+        }, 1200); // 1.2s per generation playback
     }
 }
 

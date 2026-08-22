@@ -63,3 +63,12 @@ def load_run(filename):
                 trajectory.append(json.loads(line))
                 
     return jsonify({"trajectory": trajectory})
+
+@replay_bp.route('/axioms/<path:filename>', methods=['GET'])
+def load_axioms(filename):
+    """Loads axiom evolution history for a specific run."""
+    # filename is like 'test_sandbox_001/synthetica_actions.jsonl'
+    sim_id = os.path.dirname(filename)
+    from ..services.axiom_tracker import AxiomTracker
+    records = AxiomTracker.read_axioms(sim_id)
+    return jsonify({"axioms": records})

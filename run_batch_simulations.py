@@ -36,13 +36,18 @@ GRID = [
 def apply_grid_params(params):
     # Reset Environment Physics to param state
     environment_instance.total_energy_motes = params["energy"]
-    environment_instance.state['A']['energy'] = params["energy"] // 2
-    environment_instance.state['B']['energy'] = params["energy"] // 2
+    environment_instance.state['A'] = {'energy': params["energy"] // 2, 'trust': 100}
+    environment_instance.state['B'] = {'energy': params["energy"] // 2, 'trust': 100}
     environment_instance.punishment = float(params["punishment"])
     environment_instance.temptation = float(params["temptation"])
     environment_instance.barrier_integrity = 100.0
     environment_instance.current_generation = 1
     environment_instance.scars = []
+    environment_instance.social_memory = []
+    environment_instance.event_log = []
+    environment_instance.pending_events = []
+    import random
+    environment_instance._next_event_gen = random.randint(8, 12)
     environment_instance.last_generation_actions = []
     environment_instance.agent_profiles = {}
     environment_instance.history = []

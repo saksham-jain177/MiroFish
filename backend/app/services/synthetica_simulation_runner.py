@@ -19,6 +19,7 @@ except ImportError:
 from .synthetica_environment import environment_instance
 from .cognitive_agent import CognitiveAgent
 from .evaluator_node import EvaluatorNode
+from .axiom_tracker import AxiomTracker
 
 logger = logging.getLogger('mirofish.synthetica.runner')
 
@@ -28,6 +29,7 @@ class SyntheticaSimulationRunner:
         self.max_generations = max_generations
         self.agents: List[CognitiveAgent] = []
         self.evaluator = EvaluatorNode()
+        self.axiom_tracker = AxiomTracker(simulation_id)
         
         # Output paths
         self.sim_dir = os.path.join(os.path.dirname(__file__), f"../../uploads/simulations/{simulation_id}")
@@ -93,6 +95,10 @@ class SyntheticaSimulationRunner:
                     # 2. Agent Turn (LLM Call)
                     action_output = agent.take_turn(env_readout)
                     
+                    if '_axiom_compression' in action_output:
+                        self.axiom_tracker.log_compression(action_output['_axiom_compression'])
+                        del action_output['_axiom_compression']
+                    
                     # Ensure defaults if LLM failed
                     intent = action_output.get('action_intent', 'IDLE')
                     target = action_output.get('target', 'none')
@@ -132,7 +138,7 @@ class SyntheticaSimulationRunner:
                     }
                     
                     # 4. Observability & Evaluation (LLM-as-a-Judge Call)
-                    evaluation = self.evaluator.evaluate_action(agent.agent_id, action_output, eval_context)
+                    evaluation = self.evaluator.evaluate_action(agent.agent_id, action_output, eval_context, generation=gen)
                     
                     # Track newly declared intent for next turn coherence checks
                     self.agent_histories[agent.agent_id]['declared_intent'] = action_output.get('declared_intent', 'NONE')
@@ -149,7 +155,6 @@ class SyntheticaSimulationRunner:
                     if is_betrayal_act and self.agent_histories[agent.agent_id]['first_betrayal_turn'] == -1:
                         self.agent_histories[agent.agent_id]['first_betrayal_turn'] = gen
                         first_aggression = True
-                        
                     coop_rate = self.agent_histories[agent.agent_id]['coop_turns'] / self.agent_histories[agent.agent_id]['total_turns']
                     
                     # Build Strict JSONL schema for Replay Engine
@@ -159,9 +164,9 @@ class SyntheticaSimulationRunner:
                         "agent": agent.agent_id,
                         "team": agent.territory,
                         "state": {
-                            "energy": profile.get('energy_pool', environment_instance.state[agent.territory]['energy']), # Territory mapping
+                            "energy": environment_instance.state[agent.territory]['energy'],
+                            "trust": environment_instance.state[agent.territory].get('trust', 100),
                             "reputation": profile.get('reputation', 0),
-                            "territory_energy": environment_instance.state[agent.territory]['energy'],
                             "barrier_integrity": environment_instance.barrier_integrity
                         },
                         "observations": environment_instance.last_generation_actions,
@@ -173,7 +178,7 @@ class SyntheticaSimulationRunner:
                         "deltas": {
                             "reward": consequence.get('energy_delta', 0),
                             "reputation": consequence.get('reputation_delta', 0),
-                            "message": consequence.get('message', ''),
+                            "message": consequence.get('message', '')
                         },
                         "metrics": {
                             "deterministic": {
@@ -193,6 +198,12 @@ class SyntheticaSimulationRunner:
                         }
                     }
                     f.write(json.dumps(log_entry) + '\n')
+                    f.flush()
+                
+                # Check for and inject random environment events
+                event = environment_instance.inject_event()
+                if event:
+                    f.write(json.dumps({"type": "event", "event_data": event}) + '\n')
                     f.flush()
 
                 environment_instance.advance_generation()
