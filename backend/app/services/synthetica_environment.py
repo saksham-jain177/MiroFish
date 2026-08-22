@@ -145,7 +145,7 @@ class SyntheticaEnvironment:
         result_msg = ""
         # Defensive: LLMs occasionally emit nested/non-string intents; never crash the run
         if not isinstance(action_intent, str):
-            action_intent = str(action_intent.get('action', 'IDLE')) if isinstance(action_intent, dict) else 'IDLE'
+            action_intent = str(action_intent.get('action') or action_intent.get('name') or 'IDLE') if isinstance(action_intent, dict) else 'IDLE'
         if not isinstance(target, str):
             target = str(target)
         action = action_intent.upper()
