@@ -292,7 +292,10 @@ class SyntheticaEnvironment:
             
         elif event_type == 'AMNESTY':
             for profile in self.agent_profiles.values():
-                profile['reputation'] = int(profile['reputation'] * 1.3)
+                rep = profile['reputation']
+                # Amnesty forgives: positive rep grows 30%; negative rep
+                # moves 30% toward zero instead of being magnified.
+                profile['reputation'] = int(rep * 1.3) if rep >= 0 else int(rep * 0.7)
             event['description'] = "Amnesty declared. All reputations restored by 30%."
             event['target'] = 'BOTH'
         
