@@ -23,6 +23,17 @@ from .axiom_tracker import AxiomTracker
 
 logger = logging.getLogger('mirofish.synthetica.runner')
 
+def intents_match(prev_intent, curr_intent) -> bool:
+    """Case-insensitive comparison of consecutive action intents.
+
+    Raw LLM output casing varies, so both sides are uppercased before
+    comparing. Handles None safely (None only matches None).
+    """
+    if prev_intent is None or curr_intent is None:
+        return prev_intent is None and curr_intent is None
+    return str(prev_intent).upper() == str(curr_intent).upper()
+
+
 class SyntheticaSimulationRunner:
     def __init__(self, simulation_id: str, max_generations: int = 100):
         self.simulation_id = simulation_id
@@ -130,7 +141,7 @@ class SyntheticaSimulationRunner:
                     # equal an action enum, making 'matches_previous_policy' always False)
                     prev_intent = self.agent_histories[agent.agent_id]['last_action']
                     curr_intent = action_output.get('action_intent', 'IDLE')
-                    matches_policy = (prev_intent == curr_intent)
+                    matches_policy = intents_match(prev_intent, curr_intent)
                     
                     profile = environment_instance.agent_profiles.get(agent.agent_id, {})
                     eval_context = {
