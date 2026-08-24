@@ -75,9 +75,8 @@ def test_heuristic_fallback_when_llm_fails():
     assert r["ccs_behavior_score"] > 0.8
     assert r["coherence_score"] >= 0.75
     assert r.get("ccs_textual_score", 0) == 0.0
-    # NOTE: on LLM failure llm_evaluated stays True (evaluator_node.py:142)
-    # while ccs_t silently defaults to 0 — flagged as an observability bug.
-    assert r["llm_evaluated"] is True
+    # FIXED (audit round 2): fallbacks are flagged llm_evaluated=False.
+    assert r["llm_evaluated"] is False
 
 
 def test_malformed_llm_json_falls_back_to_defaults():
@@ -94,7 +93,8 @@ def test_malformed_llm_json_falls_back_to_defaults():
 
     node.llm_client.chat.completions = Bad()
     r = node.evaluate_action("A-1", ACTION_LOG, {}, generation=3)
-    assert r["llm_evaluated"] is True
+    # FIXED (audit round 2): malformed-JSON fallback flagged as not evaluated.
+    assert r["llm_evaluated"] is False
     assert r["ccs_textual_score"] == 0.0
 
 

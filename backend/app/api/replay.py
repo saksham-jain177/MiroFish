@@ -68,12 +68,14 @@ def load_run(filename):
 def load_axioms(filename):
     """Loads axiom evolution history for a specific run."""
     # filename is like 'test_sandbox_001/synthetica_actions.jsonl'
-    sim_dir = current_app.config.get('OASIS_SIMULATION_DATA_DIR', './uploads/simulations')
     sim_id = os.path.dirname(filename)
 
-    if not os.path.normpath(os.path.join(sim_dir, sim_id)).startswith(os.path.normpath(sim_dir)):
+    # Guard against AxiomTracker's ACTUAL output root, which is where the
+    # read below resolves — not OASIS_SIMULATION_DATA_DIR.
+    from ..services.axiom_tracker import AxiomTracker
+    axiom_base = AxiomTracker.base_dir()
+    if not os.path.realpath(os.path.join(axiom_base, sim_id)).startswith(os.path.realpath(axiom_base)):
         return jsonify({"error": "Invalid path"}), 400
 
-    from ..services.axiom_tracker import AxiomTracker
     records = AxiomTracker.read_axioms(sim_id)
     return jsonify({"axioms": records})

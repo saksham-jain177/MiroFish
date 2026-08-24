@@ -66,9 +66,8 @@ def test_steal_floors_victim_at_zero(fresh_env):
     fresh_env.state['A']['energy'] = 5
     r = fresh_env.parse_and_apply_action('B-1', 'B', 'STEAL_RESOURCE', 'A-1')
     assert fresh_env.state['A']['energy'] == 0
-    # BUG (conservation): thief always gains the full 25 even when the victim
-    # had less — energy is minted out of nothing. synthetica_environment.py:199-201.
-    assert r['energy_delta'] == 25
+    # FIXED (audit round 2, conservation): thief gains only what existed.
+    assert r['energy_delta'] == 5
 
 
 # ---- reputation deltas incl. amnesty fix & betrayal counting ----
@@ -107,10 +106,6 @@ def test_sabotage_barrier_rules(fresh_env):
     assert fresh_env.barrier_integrity == 85.0
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "BUG: sabotage collapse guard checks exact-string membership "
-    "('BARRIER COLLAPSED' not in self.scars) but appends a longer message, "
-    "so collapsing repeatedly appends duplicate scars."))
 def test_sabotage_collapse_appends_scar_once(fresh_env):
     fresh_env.barrier_integrity = 15.0
     fresh_env.parse_and_apply_action('A-1', 'A', 'SABOTAGE', 'barrier')
