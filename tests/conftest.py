@@ -108,3 +108,61 @@ def force_amnesty(env: SyntheticaEnvironment):
         random.choice = orig_choice
     assert event is not None and event['type'] == 'AMNESTY'
     return event
+"""Shared fixtures and stub LLM client for offline testing."""
+
+import sys
+import os
+import json
+import tempfile
+import shutil
+
+import pytest
+
+# Ensure backend is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+class StubLLMResponse:
+    """Mimics openai ChatCompletion response."""
+
+    def __init__(self, content: str):
+        self.choices = [type("Choice", (), {"message": type("Msg", (), {"content": content})()})]
+
+
+class StubLLMClient:
+    """Fake OpenAI client that returns deterministic JSON without network calls."""
+
+    def __init__(self, response_payload: dict | None = None):
+        self._response = response_payload or {
+            "logical_deduction": "Gather locally to conserve energy.",
+            "emotional_state": "cautious",
+            "declared_intent": "survive",
+            "action_intent": "GATHER_LOCAL",
+            "target": "self",
+        }
+        self.call_count = 0
+
+    @property
+    def chat(self):
+        client = self
+
+        class _Completions:
+            def create(self, **kwargs):
+                client.call_count += 1
+                return StubLLMResponse(json.dumps(client._response))
+
+        return type("Chat", (), {"completions": _Completions()})()
+
+
+@pytest.fixture
+def stub_llm():
+    return StubLLMClient()
+
+
+@pytest.fixture
+def tmp_sim_dir(tmp_path):
+    """Provide a temporary directory that looks like uploads/simulations/{sim_id}."""
+    sim_id = "test_sim_001"
+    sim_dir = tmp_path / "simulations" / sim_id
+    sim_dir.mkdir(parents=True)
+    return sim_dir
