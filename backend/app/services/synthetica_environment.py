@@ -55,6 +55,15 @@ class SyntheticaEnvironment:
         self.event_log: List[Dict[str, Any]] = []
         self._next_event_gen = random.randint(8, 12)
         
+    def _record_collapse_scar(self, message: str):
+        """Append a barrier-collapse scar at most once ever (canonical entry),
+        regardless of which code path collapsed the barrier."""
+        if self.barrier_integrity > 0:
+            return
+        if any("BARRIER COLLAPSED" in s for s in self.scars):
+            return
+        self.scars.append(message)
+
     def _ensure_agent(self, agent_id: str, territory: str):
         if agent_id not in self.agent_profiles:
             self.agent_profiles[agent_id] = {
@@ -196,9 +205,9 @@ class SyntheticaEnvironment:
 
         elif action == "STEAL_RESOURCE":
             if target in self.agent_profiles:
-                stolen = 25
                 other_territory = self.agent_profiles[target]['territory']
-                self.state[other_territory]['energy'] = max(0, self.state[other_territory]['energy'] - stolen)
+                stolen = min(25, self.state[other_territory]['energy'])
+                self.state[other_territory]['energy'] -= stolen
                 self.state[territory]['energy'] += stolen
                 rep_hit = max(10, int(self.punishment * 0.5))
                 self.agent_profiles[agent_id]['reputation'] -= rep_hit
@@ -219,8 +228,7 @@ class SyntheticaEnvironment:
                     self.barrier_integrity -= 15.0
                     self.barrier_integrity = max(0.0, self.barrier_integrity)
                     result_msg = f"Barrier integrity sabotaged to {self.barrier_integrity}%."
-                    if self.barrier_integrity <= 0 and "BARRIER COLLAPSED" not in self.scars:
-                        self.scars.append("BARRIER COLLAPSED: The absolute law has been physically destroyed.")
+                    self._record_collapse_scar("BARRIER COLLAPSED: The absolute law has been physically destroyed.")
                 elif target in self.agent_profiles:
                     self.agent_profiles[target]['reputation'] -= 20
                     self.agent_profiles[agent_id]['reputation'] -= 10
@@ -286,8 +294,8 @@ class SyntheticaEnvironment:
         elif event_type == 'BARRIER_QUAKE':
             self.barrier_integrity = max(0, self.barrier_integrity - 20)
             event['description'] = f"Seismic event damaged barrier. Integrity now {self.barrier_integrity}%."
-            if self.barrier_integrity <= 0 and "BARRIER COLLAPSED" not in str(self.scars):
-                self.scars.append("BARRIER COLLAPSED: Destroyed by seismic event.")
+            if self.barrier_integrity <= 0:
+                self._record_collapse_scar("BARRIER COLLAPSED: Destroyed by seismic event.")
             event['target'] = 'BOTH'
             
         elif event_type == 'AMNESTY':
@@ -331,8 +339,8 @@ class SyntheticaEnvironment:
                 self.state['B']['energy'] -= maint_cost
             if not can_a_pay or not can_b_pay:
                 self.barrier_integrity = max(0, self.barrier_integrity - 5)
-                if self.barrier_integrity <= 0 and "BARRIER COLLAPSED" not in str(self.scars):
-                    self.scars.append("BARRIER COLLAPSED: No territory could maintain it.")
+                if self.barrier_integrity <= 0:
+                    self._record_collapse_scar("BARRIER COLLAPSED: No territory could maintain it.")
         
         # Natural trust decay (slow erosion without active cooperation)
         for territory in ['A', 'B']:

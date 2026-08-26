@@ -106,7 +106,7 @@ class EvaluatorNode:
         """
         try:
             ccs_behavior, coherence = self._deterministic_scores(action_log, context)
-            
+
             # Skip LLM judge on off-cadence generations
             use_llm = (generation % Config.EVAL_CADENCE == 0)
             
@@ -128,10 +128,12 @@ class EvaluatorNode:
                     except json.JSONDecodeError:
                         logger.error(f"[EVALUATOR] LLM returned malformed JSON. Defaulting textual scores.")
                         score = EvaluatorOutputSchema().model_dump()
-                        
+                        use_llm = False  # fallback, not a real eval
+
                 except Exception as llm_err:
                     logger.warning(f"[EVALUATOR] LLM call failed/timed out ({llm_err}). Using deterministic-only.")
                     score = EvaluatorOutputSchema().model_dump()
+                    use_llm = False  # fallback, not a real eval
             else:
                 # Off-cadence: deterministic-only (no LLM call = fast)
                 score = EvaluatorOutputSchema().model_dump()
